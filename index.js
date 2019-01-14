@@ -2,11 +2,13 @@ const rp = require('request-promise')
 const cheerio = require('cheerio')
 const fs = require('fs')
 
-async function getQuotes() {
+// Get the quotes data from goodreads page
+const getQuotes = async (uri) => {
   let quotes = []
+
   const options = {
-    uri:'https://www.goodreads.com/author/quotes/4918776.Seneca',
-    transform: function(body) {
+    uri,
+    transform: (body) => {
       return cheerio.load(body)
     }
   }
@@ -14,35 +16,49 @@ async function getQuotes() {
   try {
     const $ = await rp(options)
 
-    for(let i = 0; i < 30; i++) {
-      const id = i + 1
+    for (let i = 0; i < 30; i++) {
       const author = $('.authorOrTitle')[i].children[0].data.trim()
       const message = $('.quoteText')[i].children[0].data.trim()
-
-      quotes.push({ id, author, message })
+  
+      quotes.push({ author, message })
     }
   
   }
   catch(err) {
     console.error(err)
   }
-  
+
   return quotes
 }
 
-async function saveToJson(obj) {
-  const data = await JSON.stringify(obj, null, 2)
-  await fs.writeFile('./data.json', data, (err) => {
-      if (err) console.error(err)
-  })
-
-  return data
-}
-
 async function main() {
-  const result = await getQuotes()
-  const output = await saveToJson(result)
-  console.log(output)
+  const pageLimit = 3
+
+  let currentPage = 1
+  let goodreadsUri = 'https://www.goodreads.com/author/quotes/4918776.Seneca'
+  let result = []
+
+  while (currentPage <= pageLimit) {
+    try {
+      const data = await getQuotes(goodreadsUri)
+      result = [...result, ...data]
+    }
+    catch(err) { console.error(err) }
+
+    currentPage += 1
+    goodreadsUri += `?page=${currentPage}`
+
+  }
+  
+  try {
+    fs.writeFileSync('./quotes.json', JSON.stringify(result, null, 2))
+  }
+  catch(err) {
+    console.error(err)
+  }
+
+  return `${result.length} quotes scraped.`
+
 }
 
 main()
